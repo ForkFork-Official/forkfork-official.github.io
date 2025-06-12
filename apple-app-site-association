@@ -1,0 +1,17 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "RYGMZZJ6M5.site.eifer.app.ForkFork",
+                "paths": ["*"],
+                "components": [
+                    {
+                        "/": "/addfriend",
+                        "comment": "Matches /addfriend path"
+                    }
+                ]
+            }
+        ]
+    }
+} 
