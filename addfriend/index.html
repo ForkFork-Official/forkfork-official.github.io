@@ -5,18 +5,22 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script>
-        // Check if the app is installed by trying to open it
         function openApp() {
-            // Try to open the app
-            window.location.href = "forkfork://addfriend" + window.location.search;
-            
-            // If the app doesn't open within 2 seconds, redirect to App Store
-            setTimeout(function() {
-                window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
-            }, 2000);
+            // Universal Link로 이동 (앱이 설치되어 있으면 앱이 열림)
+            window.location.replace("https://forkfork-official.github.io/addfriend" + window.location.search);
+
+            // 앱이 열리지 않고 웹에 남아있는 경우(즉, 앱 미설치)만 앱스토어로 이동
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'hidden') {
+                    // 사용자가 앱으로 이동한 경우, 아무것도 하지 않음
+                } else {
+                    // 앱이 설치되어 있지 않아 웹에 남아있는 경우, 앱스토어로 이동
+                    setTimeout(function() {
+                        window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+                    }, 1000);
+                }
+            });
         }
-        
-        // Run when the page loads
         window.onload = openApp;
     </script>
 </head>
@@ -24,4 +28,4 @@
     <h1>Opening ForkFork...</h1>
     <p>If the app doesn't open automatically, <a href="https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB">click here</a> to download ForkFork from the App Store.</p>
 </body>
-</html> 
+</html>
