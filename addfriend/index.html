@@ -5,96 +5,59 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script>
-        function detectAppAndRedirect() {
-            let appOpened = false;
-            let redirectTimer;
-            let startTime = Date.now();
+        // Simple app detection without interfering with Universal Links
+        function handleAppRedirect() {
+            // Get deviceID from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const deviceID = urlParams.get('deviceID');
             
-            // Function to handle app opening detection
-            function handleVisibilityChange() {
-                if (document.hidden || document.webkitHidden) {
-                    // Page became hidden, likely app opened
-                    appOpened = true;
-                    clearTimeout(redirectTimer);
-                }
+            if (!deviceID) {
+                // No deviceID, redirect to App Store
+                window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+                return;
             }
             
-            function handlePageHide() {
-                // Page is being unloaded, likely app opened
-                appOpened = true;
-                clearTimeout(redirectTimer);
-            }
+            // Check if this page was opened as a fallback (app not installed)
+            // Universal Links should have already opened the app if it's installed
+            // If we're here, it means the app is likely not installed
             
-            function handleBlur() {
-                // Window lost focus, likely app opened
-                appOpened = true;
-                clearTimeout(redirectTimer);
-            }
+            let hasRedirected = false;
             
-            function handleFocus() {
-                // Check if we came back to the page quickly (app didn't open)
-                const timeElapsed = Date.now() - startTime;
-                if (timeElapsed < 1000 && !appOpened) {
-                    // Came back quickly, app probably not installed
-                    clearTimeout(redirectTimer);
-                    redirectTimer = setTimeout(function() {
-                        if (!appOpened) {
-                            window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
-                        }
-                    }, 1000);
-                }
-            }
-            
-            // Add event listeners for app detection
-            document.addEventListener('visibilitychange', handleVisibilityChange);
-            document.addEventListener('webkitvisibilitychange', handleVisibilityChange);
-            window.addEventListener('pagehide', handlePageHide);
-            window.addEventListener('blur', handleBlur);
-            window.addEventListener('focus', handleFocus);
-            
-            // Try to open the app using custom URL scheme
-            const deviceID = new URLSearchParams(window.location.search).get('deviceID');
-            const customSchemeURL = `forkfork://addfriend${deviceID ? '?deviceID=' + deviceID : ''}`;
-            
-            // Use window.location.href to try opening the app
-            try {
-                window.location.href = customSchemeURL;
-            } catch (e) {
-                // If there's an error, app is probably not installed
-                console.log('Error opening app:', e);
-            }
-            
-            // Set timer to redirect to App Store if app doesn't open
-            redirectTimer = setTimeout(function() {
-                if (!appOpened) {
-                    // App didn't open, redirect to App Store
+            // Set a timer to redirect to App Store
+            setTimeout(function() {
+                if (!hasRedirected) {
+                    hasRedirected = true;
                     window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
                 }
-            }, 3000);
+            }, 1500);
+            
+            // Listen for page visibility changes (in case app opens)
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    // Page became hidden, app might have opened
+                    hasRedirected = true;
+                }
+            });
+            
+            // Listen for page hide events
+            window.addEventListener('pagehide', function() {
+                hasRedirected = true;
+            });
         }
         
-        // Prevent multiple executions
-        let executed = false;
-        
-        // Run detection when page loads
-        window.onload = function() {
-            if (!executed) {
-                executed = true;
-                detectAppAndRedirect();
-            }
-        };
-        
-        // Also try on DOMContentLoaded in case onload doesn't fire
-        document.addEventListener('DOMContentLoaded', function() {
-            if (!executed) {
-                executed = true;
-                detectAppAndRedirect();
-            }
-        });
+        // Run when page loads
+        window.onload = handleAppRedirect;
     </script>
 </head>
 <body>
-    <h1>Opening ForkFork...</h1>
-    <p>If the app doesn't open automatically, <a href="https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB">click here</a> to download ForkFork from the App Store.</p>
+    <div style="text-align: center; padding: 50px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <h1>🍴 ForkFork</h1>
+        <p>앱이 설치되어 있지 않다면, 아래 버튼을 눌러 다운로드하세요.</p>
+        <br>
+        <a href="https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB" 
+           style="display: inline-block; background-color: #007AFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+            App Store에서 다운로드
+        </a>
+    </div>
 </body>
 </html>
