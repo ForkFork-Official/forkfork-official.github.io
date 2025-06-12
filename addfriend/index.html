@@ -8,6 +8,7 @@
         function detectAppAndRedirect() {
             let appOpened = false;
             let redirectTimer;
+            let startTime = Date.now();
             
             // Function to handle app opening detection
             function handleVisibilityChange() {
@@ -30,21 +31,38 @@
                 clearTimeout(redirectTimer);
             }
             
+            function handleFocus() {
+                // Check if we came back to the page quickly (app didn't open)
+                const timeElapsed = Date.now() - startTime;
+                if (timeElapsed < 1000 && !appOpened) {
+                    // Came back quickly, app probably not installed
+                    clearTimeout(redirectTimer);
+                    redirectTimer = setTimeout(function() {
+                        if (!appOpened) {
+                            window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+                        }
+                    }, 1000);
+                }
+            }
+            
             // Add event listeners for app detection
             document.addEventListener('visibilitychange', handleVisibilityChange);
             document.addEventListener('webkitvisibilitychange', handleVisibilityChange);
             window.addEventListener('pagehide', handlePageHide);
             window.addEventListener('blur', handleBlur);
+            window.addEventListener('focus', handleFocus);
             
             // Try to open the app using custom URL scheme
             const deviceID = new URLSearchParams(window.location.search).get('deviceID');
             const customSchemeURL = `forkfork://addfriend${deviceID ? '?deviceID=' + deviceID : ''}`;
             
-            // Create invisible iframe to try opening the app
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = customSchemeURL;
-            document.body.appendChild(iframe);
+            // Use window.location.href to try opening the app
+            try {
+                window.location.href = customSchemeURL;
+            } catch (e) {
+                // If there's an error, app is probably not installed
+                console.log('Error opening app:', e);
+            }
             
             // Set timer to redirect to App Store if app doesn't open
             redirectTimer = setTimeout(function() {
@@ -52,18 +70,27 @@
                     // App didn't open, redirect to App Store
                     window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
                 }
-            }, 2500);
-            
-            // Clean up iframe after attempt
-            setTimeout(function() {
-                if (iframe.parentNode) {
-                    iframe.parentNode.removeChild(iframe);
-                }
-            }, 1000);
+            }, 3000);
         }
         
+        // Prevent multiple executions
+        let executed = false;
+        
         // Run detection when page loads
-        window.onload = detectAppAndRedirect;
+        window.onload = function() {
+            if (!executed) {
+                executed = true;
+                detectAppAndRedirect();
+            }
+        };
+        
+        // Also try on DOMContentLoaded in case onload doesn't fire
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!executed) {
+                executed = true;
+                detectAppAndRedirect();
+            }
+        });
     </script>
 </head>
 <body>
