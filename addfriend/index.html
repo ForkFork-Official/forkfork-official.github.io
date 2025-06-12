@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ForkFork - Add Friend</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+        // Check if the app is installed by trying to open it
+        function openApp() {
+            // Try to open the app
+            window.location.href = "forkfork://addfriend" + window.location.search;
+            
+            // If the app doesn't open within 2 seconds, redirect to App Store
+            setTimeout(function() {
+                window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+            }, 2000);
+        }
+        
+        // Run when the page loads
+        window.onload = openApp;
+    </script>
+</head>
+<body>
+    <h1>Opening ForkFork...</h1>
+    <p>If the app doesn't open automatically, <a href="https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB">click here</a> to download ForkFork from the App Store.</p>
+</body>
+</html> 
