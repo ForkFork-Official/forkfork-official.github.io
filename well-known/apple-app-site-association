@@ -1,0 +1,11 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "RYGMZZJ6M5.site.eifer.app.ForkFork",
+                "paths": ["/addfriend", "/addfriend/*"]
+            }
+        ]
+    }
+}
