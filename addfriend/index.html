@@ -4,8 +4,91 @@
     <title>ForkFork - Add Friend</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <!-- Smart App Banner for better iOS app detection -->
+    <meta name="apple-itunes-app" content="app-id=6744844399">
+    
+    <!-- Prevent caching to ensure fresh content -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <!-- Open Graph tags for better sharing -->
+    <meta property="og:title" content="ForkFork - 친구 추가">
+    <meta property="og:description" content="ForkFork 앱에서 새로운 친구를 추가하세요!">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://forkfork-official.github.io/addfriend">
+    
+    <!-- Additional iOS compatibility -->
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <script>
-        // Simple app detection without interfering with Universal Links
+        // 카카오톡 인앱 브라우저 감지
+        function isKakaoTalkInApp() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            return userAgent.toLowerCase().includes('kakaotalk');
+        }
+        
+        // 외부 브라우저로 리다이렉트 (카카오톡 전용)
+        function redirectToExternalBrowser() {
+            const currentUrl = window.location.href;
+            
+            // 카카오톡에서 외부 브라우저로 열기 위한 방법들
+            if (confirm('앱을 실행하려면 외부 브라우저에서 열어야 합니다. 계속하시겠습니까?')) {
+                const fallbackUrl = `https://forkfork-official.github.io/addfriend/external-redirect.html${window.location.search}`;
+                window.location.href = fallbackUrl;
+            }
+        }
+        
+        // 앱 실행 시도
+        function attemptAppLaunch(deviceID) {
+            return new Promise((resolve, reject) => {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+                
+                let hasRedirected = false;
+                const timeout = setTimeout(() => {
+                    if (!hasRedirected) {
+                        hasRedirected = true;
+                        document.body.removeChild(iframe);
+                        reject(new Error('App launch failed'));
+                    }
+                }, 2000);
+                
+                // 페이지 가시성 변화 감지 (앱이 열리면 페이지가 숨겨짐)
+                const visibilityHandler = () => {
+                    if (document.hidden && !hasRedirected) {
+                        hasRedirected = true;
+                        clearTimeout(timeout);
+                        document.removeEventListener('visibilitychange', visibilityHandler);
+                        document.body.removeChild(iframe);
+                        resolve();
+                    }
+                };
+                
+                document.addEventListener('visibilitychange', visibilityHandler);
+                
+                // 여러 방법으로 앱 실행 시도
+                try {
+                    // 1. 커스텀 URL 스킴 시도
+                    iframe.src = `forkfork://addfriend?deviceID=${deviceID}`;
+                    
+                    // 2. 유니버설 링크 시도 (약간의 지연 후)
+                    setTimeout(() => {
+                        if (!hasRedirected) {
+                            window.location.href = `https://forkfork-official.github.io/addfriend?deviceID=${deviceID}`;
+                        }
+                    }, 500);
+                    
+                } catch (error) {
+                    console.log('App launch attempt failed:', error);
+                }
+            });
+        }
+        
+        // 메인 처리 함수
         function handleAppRedirect() {
             // Get deviceID from URL parameters
             const urlParams = new URLSearchParams(window.location.search);
@@ -17,41 +100,95 @@
                 return;
             }
             
-            // Check if this page was opened as a fallback (app not installed)
-            // Universal Links should have already opened the app if it's installed
-            // If we're here, it means the app is likely not installed
+            // 카카오톡 인앱 브라우저인지 확인
+            if (isKakaoTalkInApp()) {
+                console.log('카카오톡 인앱 브라우저에서 실행됨');
+                
+                // 카카오톡에서는 직접 앱 실행 시도 후 실패 시 안내
+                attemptAppLaunch(deviceID)
+                    .then(() => {
+                        console.log('앱 실행 성공');
+                    })
+                    .catch(() => {
+                        console.log('앱 실행 실패 - 안내 표시');
+                        showKakaoInstructions(deviceID);
+                    });
+                
+                return;
+            }
             
+            // 일반 브라우저에서의 처리 (기존 로직)
             let hasRedirected = false;
             
-            // Set a timer to redirect to App Store
-            setTimeout(function() {
-                if (!hasRedirected) {
+            // 앱 실행 시도
+            attemptAppLaunch(deviceID)
+                .then(() => {
                     hasRedirected = true;
-                    window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
-                }
-            }, 1500);
-            
-            // Listen for page visibility changes (in case app opens)
-            document.addEventListener('visibilitychange', function() {
-                if (document.hidden) {
-                    // Page became hidden, app might have opened
-                    hasRedirected = true;
-                }
-            });
-            
-            // Listen for page hide events
-            window.addEventListener('pagehide', function() {
-                hasRedirected = true;
-            });
+                    console.log('앱 실행 성공');
+                })
+                .catch(() => {
+                    if (!hasRedirected) {
+                        hasRedirected = true;
+                        // 앱 실행 실패 시 앱스토어로 이동
+                        window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+                    }
+                });
         }
         
-        // Run when page loads
+        // 카카오톡 사용자를 위한 안내 표시
+        function showKakaoInstructions(deviceID) {
+            const instructionDiv = document.getElementById('kakao-instructions');
+            if (instructionDiv) {
+                instructionDiv.style.display = 'block';
+                
+                // URL 복사 기능
+                const copyButton = document.getElementById('copy-url-btn');
+                if (copyButton) {
+                    copyButton.onclick = () => {
+                        const urlToCopy = `https://forkfork-official.github.io/addfriend?deviceID=${deviceID}`;
+                        navigator.clipboard.writeText(urlToCopy).then(() => {
+                            alert('URL이 복사되었습니다. Safari나 Chrome에서 붙여넣기하여 실행해주세요.');
+                        }).catch(() => {
+                            // 복사 실패 시 fallback
+                            const textArea = document.createElement('textarea');
+                            textArea.value = urlToCopy;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textArea);
+                            alert('URL이 복사되었습니다. Safari나 Chrome에서 붙여넣기하여 실행해주세요.');
+                        });
+                    };
+                }
+            }
+        }
+        
+        // 페이지 로드 시 실행
         window.onload = handleAppRedirect;
     </script>
 </head>
 <body>
     <div style="text-align: center; padding: 50px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <h1>🍴 ForkFork</h1>
+        <p>친구 추가 링크를 처리 중입니다...</p>
+        
+        <!-- 카카오톡 사용자를 위한 안내 (기본적으로 숨김) -->
+        <div id="kakao-instructions" style="display: none; margin-top: 30px; padding: 20px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
+            <h3>🔧 카카오톡에서 앱 실행 안내</h3>
+            <p>카카오톡에서는 앱이 자동으로 실행되지 않을 수 있습니다.</p>
+            <p><strong>다음 방법 중 하나를 시도해주세요:</strong></p>
+            <ol style="text-align: left; max-width: 300px; margin: 0 auto;">
+                <li><strong>오른쪽 상단 점 3개</strong> → <strong>Safari에서 열기</strong></li>
+                <li>아래 <strong>URL 복사</strong> 버튼을 눌러 Safari에서 실행</li>
+                <li>그래도 안 되면 <strong>App Store</strong>에서 앱을 다운로드</li>
+            </ol>
+            <br>
+            <button id="copy-url-btn" style="background-color: #007AFF; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; margin: 5px;">
+                📋 URL 복사하기
+            </button>
+        </div>
+        
+        <br><br>
         <p>앱이 설치되어 있지 않다면, 아래 버튼을 눌러 다운로드하세요.</p>
         <br>
         <a href="https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB" 
@@ -60,4 +197,4 @@
         </a>
     </div>
 </body>
-</html>
+</html> 
