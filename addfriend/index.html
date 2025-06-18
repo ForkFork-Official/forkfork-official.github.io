@@ -24,119 +24,174 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <script>
+        // 무한 루프 방지를 위한 상태 관리
+        const STORAGE_KEY = 'forkfork_redirect_attempt';
+        const MAX_ATTEMPTS = 2;
+        
         // 카카오톡 인앱 브라우저 감지
         function isKakaoTalkInApp() {
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             return userAgent.toLowerCase().includes('kakaotalk');
         }
         
-        // 외부 브라우저로 리다이렉트 (카카오톡 전용)
-        function redirectToExternalBrowser() {
-            const currentUrl = window.location.href;
+        // 실행 시도 횟수 체크 및 업데이트
+        function checkAndUpdateAttempts(deviceID) {
+            const key = `${STORAGE_KEY}_${deviceID}`;
+            const attempts = parseInt(localStorage.getItem(key) || '0');
             
-            // 카카오톡에서 외부 브라우저로 열기 위한 방법들
-            if (confirm('앱을 실행하려면 외부 브라우저에서 열어야 합니다. 계속하시겠습니까?')) {
-                const fallbackUrl = `https://forkfork-official.github.io/addfriend/external-redirect.html${window.location.search}`;
-                window.location.href = fallbackUrl;
+            if (attempts >= MAX_ATTEMPTS) {
+                console.log('최대 시도 횟수 초과, 안내 표시');
+                return false;
             }
+            
+            localStorage.setItem(key, (attempts + 1).toString());
+            
+            // 10초 후 카운터 리셋 (성공적으로 앱이 실행된 경우를 위해)
+            setTimeout(() => {
+                localStorage.removeItem(key);
+            }, 10000);
+            
+            return true;
         }
         
-        // 앱 실행 시도
+        // 안전한 앱 실행 시도
         function attemptAppLaunch(deviceID) {
             return new Promise((resolve, reject) => {
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                document.body.appendChild(iframe);
-                
                 let hasRedirected = false;
-                const timeout = setTimeout(() => {
+                let timeoutId = null;
+                let visibilityHandler = null;
+                
+                // 정리 함수
+                const cleanup = () => {
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                        timeoutId = null;
+                    }
+                    if (visibilityHandler) {
+                        document.removeEventListener('visibilitychange', visibilityHandler);
+                        document.removeEventListener('pagehide', visibilityHandler);
+                        visibilityHandler = null;
+                    }
+                };
+                
+                // 타이머 설정
+                timeoutId = setTimeout(() => {
                     if (!hasRedirected) {
                         hasRedirected = true;
-                        document.body.removeChild(iframe);
+                        cleanup();
                         reject(new Error('App launch failed'));
                     }
-                }, 2000);
+                }, 2500);
                 
-                // 페이지 가시성 변화 감지 (앱이 열리면 페이지가 숨겨짐)
-                const visibilityHandler = () => {
-                    if (document.hidden && !hasRedirected) {
+                // 페이지 가시성 변화 감지
+                visibilityHandler = () => {
+                    if ((document.hidden || document.visibilityState === 'hidden') && !hasRedirected) {
                         hasRedirected = true;
-                        clearTimeout(timeout);
-                        document.removeEventListener('visibilitychange', visibilityHandler);
-                        document.body.removeChild(iframe);
+                        cleanup();
                         resolve();
                     }
                 };
                 
                 document.addEventListener('visibilitychange', visibilityHandler);
+                document.addEventListener('pagehide', visibilityHandler);
                 
-                // 여러 방법으로 앱 실행 시도
+                // 앱 실행 시도 (무한 루프 방지)
                 try {
-                    // 1. 커스텀 URL 스킴 시도
-                    iframe.src = `forkfork://addfriend?deviceID=${deviceID}`;
+                    console.log('앱 실행 시도:', deviceID);
                     
-                    // 2. 유니버설 링크 시도 (약간의 지연 후)
+                    // 방법 1: iframe을 통한 커스텀 URL 스킴
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.style.width = '1px';
+                    iframe.style.height = '1px';
+                    iframe.src = `forkfork://addfriend?deviceID=${deviceID}`;
+                    document.body.appendChild(iframe);
+                    
+                    // iframe 정리
                     setTimeout(() => {
-                        if (!hasRedirected) {
-                            window.location.href = `https://forkfork-official.github.io/addfriend?deviceID=${deviceID}`;
+                        if (iframe.parentNode) {
+                            iframe.parentNode.removeChild(iframe);
                         }
-                    }, 500);
+                    }, 1000);
                     
                 } catch (error) {
                     console.log('App launch attempt failed:', error);
+                    hasRedirected = true;
+                    cleanup();
+                    reject(error);
                 }
             });
         }
         
         // 메인 처리 함수
         function handleAppRedirect() {
-            // Get deviceID from URL parameters
+            // URL parameters 파싱
             const urlParams = new URLSearchParams(window.location.search);
             const deviceID = urlParams.get('deviceID');
             
             if (!deviceID) {
-                // No deviceID, redirect to App Store
+                console.log('deviceID가 없어 앱스토어로 이동');
                 window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
                 return;
             }
             
-            // 카카오톡 인앱 브라우저인지 확인
-            if (isKakaoTalkInApp()) {
-                console.log('카카오톡 인앱 브라우저에서 실행됨');
-                
-                // 카카오톡에서는 직접 앱 실행 시도 후 실패 시 안내
-                attemptAppLaunch(deviceID)
-                    .then(() => {
-                        console.log('앱 실행 성공');
-                    })
-                    .catch(() => {
-                        console.log('앱 실행 실패 - 안내 표시');
-                        showKakaoInstructions(deviceID);
-                    });
-                
+            // 무한 루프 방지 체크
+            if (!checkAndUpdateAttempts(deviceID)) {
+                console.log('최대 시도 횟수 초과');
+                showKakaoInstructions(deviceID);
                 return;
             }
             
-            // 일반 브라우저에서의 처리 (기존 로직)
+            console.log('친구 추가 처리 시작:', deviceID);
+            
+            // 카카오톡 인앱 브라우저 특별 처리
+            if (isKakaoTalkInApp()) {
+                console.log('카카오톡 인앱 브라우저에서 실행됨');
+                handleKakaoInApp(deviceID);
+                return;
+            }
+            
+            // 일반 브라우저 처리
+            handleNormalBrowser(deviceID);
+        }
+        
+        // 카카오톡 인앱 브라우저 처리
+        function handleKakaoInApp(deviceID) {
+            // 즉시 안내 표시 (앱 실행 시도 없이)
+            showKakaoInstructions(deviceID);
+        }
+        
+        // 일반 브라우저 처리
+        function handleNormalBrowser(deviceID) {
             let hasRedirected = false;
             
-            // 앱 실행 시도
             attemptAppLaunch(deviceID)
                 .then(() => {
                     hasRedirected = true;
                     console.log('앱 실행 성공');
+                    // 성공 시 시도 카운터 리셋
+                    localStorage.removeItem(`${STORAGE_KEY}_${deviceID}`);
                 })
                 .catch(() => {
                     if (!hasRedirected) {
                         hasRedirected = true;
-                        // 앱 실행 실패 시 앱스토어로 이동
-                        window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+                        console.log('앱 실행 실패 - 앱스토어로 이동');
+                        // 약간의 지연 후 앱스토어로 이동 (사용자가 상황을 인지할 수 있도록)
+                        setTimeout(() => {
+                            window.location.href = "https://apps.apple.com/kr/app/forkfork/id6744844399?l=en-GB";
+                        }, 500);
                     }
                 });
         }
         
         // 카카오톡 사용자를 위한 안내 표시
         function showKakaoInstructions(deviceID) {
+            // 로딩 메시지 숨기기
+            const loadingMsg = document.querySelector('.loading-message');
+            if (loadingMsg) {
+                loadingMsg.style.display = 'none';
+            }
+            
             const instructionDiv = document.getElementById('kakao-instructions');
             if (instructionDiv) {
                 instructionDiv.style.display = 'block';
@@ -146,25 +201,64 @@
                 if (copyButton) {
                     copyButton.onclick = () => {
                         const urlToCopy = `https://forkfork-official.github.io/addfriend?deviceID=${deviceID}`;
-                        navigator.clipboard.writeText(urlToCopy).then(() => {
-                            alert('URL이 복사되었습니다. Safari나 Chrome에서 붙여넣기하여 실행해주세요.');
-                        }).catch(() => {
-                            // 복사 실패 시 fallback
-                            const textArea = document.createElement('textarea');
-                            textArea.value = urlToCopy;
-                            document.body.appendChild(textArea);
-                            textArea.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(textArea);
-                            alert('URL이 복사되었습니다. Safari나 Chrome에서 붙여넣기하여 실행해주세요.');
-                        });
+                        
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(urlToCopy).then(() => {
+                                alert('URL이 복사되었습니다. Safari나 Chrome에서 붙여넣기하여 실행해주세요.');
+                            }).catch(() => {
+                                fallbackCopy(urlToCopy);
+                            });
+                        } else {
+                            fallbackCopy(urlToCopy);
+                        }
+                    };
+                }
+                
+                // 외부 브라우저 열기 버튼
+                const openExternalButton = document.getElementById('open-external-btn');
+                if (openExternalButton) {
+                    openExternalButton.onclick = () => {
+                        const externalUrl = `https://forkfork-official.github.io/addfriend/external-redirect.html?deviceID=${deviceID}`;
+                        window.location.href = externalUrl;
                     };
                 }
             }
         }
         
+        // 복사 fallback 함수
+        function fallbackCopy(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                alert('URL이 복사되었습니다. Safari나 Chrome에서 붙여넣기하여 실행해주세요.');
+            } catch (err) {
+                alert('복사에 실패했습니다. URL을 수동으로 복사해주세요: ' + text);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+        
         // 페이지 로드 시 실행
         window.onload = handleAppRedirect;
+        
+        // 페이지 focus 시 시도 카운터 리셋 (사용자가 다시 돌아온 경우)
+        window.onfocus = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const deviceID = urlParams.get('deviceID');
+            if (deviceID) {
+                // 포커스 시 카운터 리셋 (단, 즉시가 아닌 조금 후에)
+                setTimeout(() => {
+                    localStorage.removeItem(`${STORAGE_KEY}_${deviceID}`);
+                }, 1000);
+            }
+        };
     </script>
 </head>
 <body>
